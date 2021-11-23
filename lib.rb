@@ -2,6 +2,9 @@ require 'json'
 require 'gruff'
 require 'net/ssh'
 require 'net/scp'
+require 'date'
+
+
 class SSH
     def initialize
         c      = Config.new
@@ -12,7 +15,7 @@ class SSH
     end
 end
 class SCP
-    def initialize(file_name="/home/cowrie/cowrie/var/log/cowrie/cowrie.json", out)
+    def initialize(file_name="/home/cowrie/cowrie/var/log/cowrie/cowrie.json", out = Date.today.to_s + "-cowrie.json")
         @file_name = file_name
         @out       = out
     end
@@ -53,23 +56,16 @@ class Config
     end
 end
 class Main
-    def run
-        ips = []
+    def get_logs
+        # Get all the cowrie.json logs & save the file names
+        # into an array.
+        filenames = []
         Dir['*'].each do |file_name|
             if file_name.include?("cowrie")
-                File.readlines(file_name).each do |json|
-                    begin
-                        j = JSON.parse(json)
-                        if j["eventid"].to_s == "cowrie.login.failed"
-                            ips << [ j["message"].split("[")[1].split("]")[0], j["src_ip"] ]
-                            #ips << [ j["message"].split("[")[1].split("]")[0], j["src_ip"] ]
-                        end
-                    rescue
-                    end
-                end
+                filenames << file_name
             end
         end
-    return ips.uniq
+    return filenames
     end
     def clean_data(array, o, state=true)
         h = {}
@@ -91,7 +87,202 @@ class Main
         end
     end
 end
+class Login < Main
+    def initialize(type: "success")
+        @logs    = get_logs
+        @type    = type
+        @session = session
+    end
+    def switch
+        if @type.to_s == "failed"
+            return EventId.login_failed.to_s
+        elsif @type.to_s == "success"
+            return EventId.login_success.to_s
+        end
+    end
+    def run
+        ips = []
+        @logs.each do |fn|
+            File.readlines(fn).each do |l|
+                begin
+                    j = JSON.parse(l)
+                    if j["eventid"].to_s == switch.to_s
+                         ips << [ j["message"].split("[")[1].split("]")[0], j["src_ip"] ]
+                    end
+                rescue => e
+                end
+            end
+        end
+    return clean_data(ips, 0, state=true)
+    end
+    def session
+        sess = []
+        @logs.each do |fn|
+            File.readlines(fn).each do |l|
+                begin
+                    j = JSON.parse(l)
+                    if j["eventid"].to_s == switch.to_s
+                         sess << [j["session"]]
+                    end
+                rescue => e
+                end
+            end
+        end
+    return clean_data(sess, 0, state=true)
+    end
+end
+class Input < Main
+    def initialize(session: nil)
+        @logs  = get_logs
+        @session = session
+    end
+    def input
+        cmd = []
+        @logs.each do |fn|
+            File.readlines(fn).each do |json|
+                begin
+                    j = JSON.parse(json)
+                    if j["eventid"].to_s == EventId.cmd_input.to_s
+                         cmd << [ j["input"], j["src_ip"]]
+                    end
+                rescue
+                end
+            end
+        end
+    return clean_data(cmd, 0, state=true)
+    end
+    def wget
+        wget = []
+        @logs.each do |fn|
+            File.readlines(fn).each do |json|
+                begin
+                    j = JSON.parse(json)
+                    if j["eventid"].to_s == EventId.cmd_input.to_s
+                        if j["input"].include?("wget")
+                            cmd << [ j["input"], j["src_ip"]]
+                        end
+                    end
+                rescue
+                end
+            end
+        end
+    return clean_data(cmd.uniq, 0, state=true)
+    end
+    def curl
+        curl = []
+        Dir['*'].each do |file_name|
+            if file_name.include?("cowrie")
+                File.readlines(file_name).each do |json|
+                    begin
+                        j = JSON.parse(json)
+                        if j["eventid"].to_s == EventId.cmd_input.to_s
+                            if j["input"].include?("curl")
+                                wget << [ j["input"], j["src_ip"] ]
+                            end
+                        end
+                    rescue
+                    end
+                end
+            end
+        end
+        return clean_data(curl, 0, state=true)
+    end
+    def search_session
+        if !@session.nil?
+            sess = []
+            @logs.each do |fn|
+                File.readlines(fn).each do |json|
+                    begin
+                        j = JSON.parse(json)
+                        if j["eventid"].to_s == EventId.cmd_input.to_s
+                            if j["session"].to_s == @session
+                                sess << [ j["input"], j["src_ip"]]
+                            end
+                        end
+                    rescue
+                    end
+                end
+            end
+        end
+    return clean_data(sess, 0, state=true)
+    end
+end
+class Downloads < Main
+    def initialize
+        @logs  = get_logs
+    end
+    def dl_file(raw: false)
+        dl = []
+        Dir['*'].each do |file_name|
+            if file_name.include?("cowrie")
+                File.readlines(file_name).each do |json|
+                    begin
+                        j = JSON.parse(json)
+                        if j["eventid"].to_s == EventId.dl_file.to_s
+                            if !j["destfile"].nil?
+                                dl << [ j["destfile"], j["src_ip"] ]
+                            end
+                        end
+                    rescue
+                    end
+                end
+            end
+        end
+        if !raw
+            return clean_data(dl, 0, state=true)
+        else
+            return dl
+        end
+    end
 
+end
+class EventId
+    def initialize(id = 0)
+        @id = id
+    end
+    def json
+        {"login_failed":  "cowrie.login.failed",
+         "login_success": "cowrie.login.success",
+         "cmd_input":     "cowrie.command.input",
+         "dl_file":       "cowrie.session.file_download",
+         "tcpip":         "cowrie.direct-tcpip.request",
+         "closed":        "cowrie.session.closed"}
+    end
+    def self.dl_file
+        return "cowrie.session.file_download"
+    end
+    def self.login_failed
+        return "cowrie.login.failed"
+    end
+    def self.login_success
+        "cowrie.login.success"
+    end
+    def self.cmd_input
+        "cowrie.command.input"
+    end
+    def self.tcpip
+        "cowrie.direct-tcpip.request"
+    end
+    def self.closed
+        "cowrie.session.closed"
+    end
+    def type
+        if @id.to_i == 1
+            return "cowrie.login.failed"
+        elsif @id.to_i == 2
+            return "cowrie.login.success"
+        elsif @id.to_i == 3
+            return "cowrie.command.input"
+        elsif @id.to_i == 4
+            return "cowrie.session.file_download"
+        elsif @id.to_i == 5
+            return "cowrie.direct-tcpip.request"
+        elsif @id.to_i == 6
+            return "cowrie.session.closed"
+        end
+    end
+
+end
 class SaveBar
   def initialize(file_name, out, title: nil, json: false, num: 10, show_labels: false, remove: false)
     @title       = title
@@ -124,63 +315,7 @@ class SaveBar
     @g.write(@out)
   end
 end
-class Input < Main
-    def input
-        cmd = []
-        Dir['*'].each do |file_name|
-            if file_name.include?("cowrie")
-                File.readlines(file_name).each do |json|
-                    begin
-                        j = JSON.parse(json)
-                        if j["eventid"].to_s == "cowrie.command.input"
-                             cmd << [ j["input"], j["src_ip"]]
-                        end
-                    rescue
-                    end
-                end
-            end
-        end
-    return clean_data(cmd.uniq, 0, state=true)
-    end
-    def wget
-        wget = []
-        Dir['*'].each do |file_name|
-            if file_name.include?("cowrie")
-                File.readlines(file_name).each do |json|
-                    begin
-                        j = JSON.parse(json)
-                        if j["eventid"].to_s == "cowrie.command.input"
-                            if j["input"].include?("wget")
-                                wget << [ j["input"], j["src_ip"] ]
-                            end
-                        end
-                    rescue
-                    end
-                end
-            end
-        end
-        return clean_data(wget.uniq, 0, state=true)
-    end
-    def curl
-        curl = []
-        Dir['*'].each do |file_name|
-            if file_name.include?("cowrie")
-                File.readlines(file_name).each do |json|
-                    begin
-                        j = JSON.parse(json)
-                        if j["eventid"].to_s == "cowrie.command.input"
-                            if j["input"].include?("curl")
-                                wget << [ j["input"], j["src_ip"] ]
-                            end
-                        end
-                    rescue
-                    end
-                end
-            end
-        end
-        return clean_data(curl.uniq, 0, state=true)
-    end
-end
+
 class PrintTable
     def table(k, h1, h2: "Count")
         table = Terminal::Table.new
@@ -190,3 +325,6 @@ class PrintTable
         puts table
     end
 end
+#p Downloads.new.dl_file(raw: true)
+p Login.new(type: "success").session
+#p Input.new(session: "77a53223db2b").search_session
