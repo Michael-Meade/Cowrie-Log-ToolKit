@@ -121,7 +121,6 @@ class SaveBar
     @j.each do |data|
       @g.data(data[0], data[1])
     end
-    p @out
     @g.write(@out)
   end
 end
@@ -154,7 +153,6 @@ class Input < Main
                             if j["input"].include?("wget")
                                 wget << [ j["input"], j["src_ip"] ]
                             end
-                             #cmd << [ j["input"], j["src_ip"]]
                         end
                     rescue
                     end
@@ -183,10 +181,12 @@ class Input < Main
         return clean_data(curl.uniq, 0, state=true)
     end
 end
-=begin
-out = Input.new.wget
-p out
-
-
-SaveBar.new(out, "test.png", json: true, show_labels: true).create_bar
-=end
+class PrintTable
+    def table(k, h1, h2: "Count")
+        table = Terminal::Table.new
+        table.headings = [h1, h2]
+        table.rows     = k
+        table.style    = {:width => @width, :border => :unicode_round, :alignment => :center }
+        puts table
+    end
+end
