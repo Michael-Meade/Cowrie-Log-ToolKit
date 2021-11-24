@@ -67,24 +67,18 @@ class Main
         end
     return filenames
     end
-    def clean_data(array, o, state=true)
+    def clean_data(array)
         h = {}
         # 0 = login
         # 1 = ip
         array.each do |ii|
-            u = ii[o.to_i]
-            if h.has_key?(u)
-                h[u] +=  1
+            if h.has_key?(ii)
+                h[ii] +=  1
             else 
-                h[u] = 1
+                h[ii] = 1
             end       
         end
-        if !state
-            return h.sort_by{|k,v| -v}
-        else 
-            return h.sort_by{|k,v| -v}.first(10)
-
-        end
+        return h.sort_by{|k,v| -v}
     end
 end
 class Login < Main
@@ -113,22 +107,24 @@ class Login < Main
                 end
             end
         end
-    return clean_data(ips, 0, state=true)
+    return clean_data(ips, 0, state=false)
     end
     def session
         sess = []
-        @logs.each do |fn|
+        logs = @logs
+        logs.each do |fn|
+            p fn
             File.readlines(fn).each do |l|
                 begin
                     j = JSON.parse(l)
                     if j["eventid"].to_s == switch.to_s
-                         sess << [j["session"]]
+                        sess << j["session"]
                     end
                 rescue => e
                 end
             end
         end
-    return clean_data(sess, 0, state=true)
+    return clean_data(sess)
     end
 end
 class Input < Main
