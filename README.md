@@ -20,3 +20,14 @@ require_relative 'lib'
 out = Input.new.wget
 SaveBar.new(out, "test.png", json: true, show_labels: true).create_bar
 ```
+
+# input.rb
+```ruby
+require_relative 'lib'
+inputs  = Input.new
+inputs.input.each do |i, ii|
+    puts "#{ii}] " + i
+end
+
+p inputs.wget
+```

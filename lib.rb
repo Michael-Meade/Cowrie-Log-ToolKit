@@ -72,13 +72,16 @@ class Main
         # 0 = login
         # 1 = ip
         array.each do |ii|
-            if h.has_key?(ii)
-                h[ii] +=  1
-            else 
+            #p ii
+            if !h.has_key?(ii)
                 h[ii] = 1
+
+            else 
+                h[ii] += 1
+
             end       
         end
-        return h.sort_by{|k,v| -v}
+    return h.sort_by{|k,v| -v}
     end
 end
 class Login < Main
@@ -86,6 +89,9 @@ class Login < Main
         @logs    = get_logs
         @type    = type
         @session = session
+    end
+    def type=(t)
+        @type = t
     end
     def switch
         if @type.to_s == "failed"
@@ -101,19 +107,18 @@ class Login < Main
                 begin
                     j = JSON.parse(l)
                     if j["eventid"].to_s == switch.to_s
-                         ips << [ j["message"].split("[")[1].split("]")[0], j["src_ip"] ]
+                         ips <<  j["message"].split("[")[1].split("]")[0] 
                     end
                 rescue => e
                 end
             end
         end
-    return clean_data(ips, 0, state=false)
+    return clean_data(ips)
     end
     def session
         sess = []
         logs = @logs
         logs.each do |fn|
-            p fn
             File.readlines(fn).each do |l|
                 begin
                     j = JSON.parse(l)
@@ -124,7 +129,8 @@ class Login < Main
                 end
             end
         end
-    return clean_data(sess)
+    return sess.uniq 
+    #clean_data(sess)
     end
 end
 class Input < Main
@@ -139,13 +145,13 @@ class Input < Main
                 begin
                     j = JSON.parse(json)
                     if j["eventid"].to_s == EventId.cmd_input.to_s
-                         cmd << [ j["input"], j["src_ip"]]
+                         cmd << j["input"]
                     end
                 rescue
                 end
             end
         end
-    return clean_data(cmd, 0, state=true)
+    return clean_data(cmd)
     end
     def wget
         wget = []
@@ -155,14 +161,14 @@ class Input < Main
                     j = JSON.parse(json)
                     if j["eventid"].to_s == EventId.cmd_input.to_s
                         if j["input"].include?("wget")
-                            cmd << [ j["input"], j["src_ip"]]
+                            wget << [ j["input"], j["src_ip"]]
                         end
                     end
                 rescue
                 end
             end
         end
-    return clean_data(cmd.uniq, 0, state=true)
+    return clean_data(wget)
     end
     def curl
         curl = []
@@ -181,12 +187,13 @@ class Input < Main
                 end
             end
         end
-        return clean_data(curl, 0, state=true)
+        return clean_data(curl)
     end
     def search_session
         if !@session.nil?
             sess = []
             @logs.each do |fn|
+                p fn
                 File.readlines(fn).each do |json|
                     begin
                         j = JSON.parse(json)
@@ -200,7 +207,8 @@ class Input < Main
                 end
             end
         end
-    return clean_data(sess, 0, state=true)
+    return sess
+    #clean_data(sess, 0, state=true)
     end
 end
 class Downloads < Main
@@ -211,12 +219,13 @@ class Downloads < Main
         dl = []
         Dir['*'].each do |file_name|
             if file_name.include?("cowrie")
+                p file_name
                 File.readlines(file_name).each do |json|
                     begin
                         j = JSON.parse(json)
                         if j["eventid"].to_s == EventId.dl_file.to_s
                             if !j["destfile"].nil?
-                                dl << [ j["destfile"], j["src_ip"] ]
+                                dl << [ j["destfile"] ]
                             end
                         end
                     rescue
@@ -224,8 +233,8 @@ class Downloads < Main
                 end
             end
         end
-        if !raw
-            return clean_data(dl, 0, state=true)
+        if raw
+            return clean_data(dl)
         else
             return dl
         end
@@ -322,5 +331,5 @@ class PrintTable
     end
 end
 #p Downloads.new.dl_file(raw: true)
-p Login.new(type: "success").session
-#p Input.new(session: "77a53223db2b").search_session
+
+#
