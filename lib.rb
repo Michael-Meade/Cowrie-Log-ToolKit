@@ -129,14 +129,16 @@ class Login < Main
                 end
             end
         end
-    return sess.uniq 
-    #clean_data(sess)
+    return clean_data(sess)
     end
 end
 class Input < Main
     def initialize(session: nil)
         @logs  = get_logs
         @session = session
+    end
+    def session=(sess)
+        @session = sess
     end
     def input
         cmd = []
@@ -145,7 +147,7 @@ class Input < Main
                 begin
                     j = JSON.parse(json)
                     if j["eventid"].to_s == EventId.cmd_input.to_s
-                         cmd << j["input"]
+                        cmd << j["input"]
                     end
                 rescue
                 end
@@ -179,7 +181,7 @@ class Input < Main
                         j = JSON.parse(json)
                         if j["eventid"].to_s == EventId.cmd_input.to_s
                             if j["input"].include?("curl")
-                                wget << [ j["input"], j["src_ip"] ]
+                                curl << [ j["input"], j["src_ip"] ]
                             end
                         end
                     rescue
@@ -193,7 +195,6 @@ class Input < Main
         if !@session.nil?
             sess = []
             @logs.each do |fn|
-                p fn
                 File.readlines(fn).each do |json|
                     begin
                         j = JSON.parse(json)
@@ -240,6 +241,35 @@ class Downloads < Main
         end
     end
 
+end
+class Session < Main
+    def initialize(raw: false)
+        @raw = raw
+    end
+    def raw=(r)
+        @raw = r
+    end
+    def input
+        input = []
+        Dir['*'].each do |file_name|
+            if file_name.include?("cowrie")
+                File.readlines(file_name).each do |json|
+                    begin
+                        j = JSON.parse(json)
+                        if j["eventid"].to_s == EventId.cmd_input.to_s
+                            input  << [ j["session"], j["input"]]
+                        end
+                    rescue
+                    end
+                end
+            end
+        end
+        if @raw 
+            return clean_data(input)
+        else
+            return input
+        end
+    end
 end
 class EventId
     def initialize(id = 0)
