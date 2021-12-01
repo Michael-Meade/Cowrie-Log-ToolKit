@@ -3,7 +3,7 @@ require 'gruff'
 require 'net/ssh'
 require 'net/scp'
 require 'date'
-
+require 'JsonBuddy'
 
 class SSH
     def initialize
@@ -220,7 +220,6 @@ class Downloads < Main
         dl = []
         Dir['*'].each do |file_name|
             if file_name.include?("cowrie")
-                p file_name
                 File.readlines(file_name).each do |json|
                     begin
                         j = JSON.parse(json)
@@ -352,7 +351,7 @@ class SaveBar
 end
 
 class PrintTable
-    def table(k, h1, h2: "Count")
+    def self.table(k, h1, h2: "Count")
         table = Terminal::Table.new
         table.headings = [h1, h2]
         table.rows     = k
@@ -360,6 +359,14 @@ class PrintTable
         puts table
     end
 end
-#p Downloads.new.dl_file(raw: true)
-
-#
+class SaveData
+    def initialize(name: "", data: d)
+        @name = name
+        @data = data
+        @date = Date.today.to_s
+    end
+    def save_json
+        j = Json.new(@date+"-"+@name+".json")
+        j.add_key(@name,    @data)
+    end
+end
